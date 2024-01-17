@@ -1,5 +1,6 @@
 from datetime import time
 import datetime
+from pprint import pprint
 from bs4 import BeautifulSoup, PageElement
 import requests
 from spell import ClassTypes, ComponentTypes, Spell
@@ -17,7 +18,9 @@ class DNDScraper:
         self.url = "http://dnd5e.wikidot.com/spells"
         self.spells = {}
         self.redis_queue = Queue(connection=Redis())
-        self.file = open("exported_spells.json", "r+")
+        
+        self.file = open("exported_spells.json", "w")
+            
         self.file.write("[")
         
         with open(DND_SPELL_TAB_LIST) as file:
@@ -34,7 +37,7 @@ class DNDScraper:
                 self.file.write(", ")
             search_spells(spell)
             self.file.write(spell.to_json() + "\n")
-            time.sleep(3)
+            time.sleep(5)
         file.write("]")
     
     def close_file(self):
