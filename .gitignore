@@ -1,0 +1,6 @@
+*.txt
+*.xlsm
+*.xlsx
+exported_spells.json
+__pycache__
+venv
