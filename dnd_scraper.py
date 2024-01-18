@@ -38,7 +38,7 @@ class DNDScraper:
             search_spells(spell)
             self.file.write(spell.to_json() + "\n")
             time.sleep(5)
-        file.write("]")
+        self.file.write("]")
     
     def close_file(self):
         if self.file:
@@ -160,6 +160,13 @@ def _set_classes(spell: Spell, paragraphs: [PageElement]):
     """
     for paragraph in paragraphs:
         if paragraph.text.startswith(SPELL_CLASS_STARTING_TEXT):
-            classes = paragraph.text.replace(SPELL_CLASS_STARTING_TEXT, "").replace(" (Optional)", "").strip()
-            for spell_class in classes.split(", "):
-                spell.classes.append(ClassTypes[spell_class.title()])
+            classes = paragraph.text.replace(SPELL_CLASS_STARTING_TEXT, "").strip()
+            for spell_class in classes.split(","):
+                spell_class = spell_class.strip()
+                has_space = spell_class.find(" ")
+                if has_space != -1:
+                    spell_class = spell_class[:spell_class.find(" ")]
+                try:
+                    spell.classes.append(ClassTypes[spell_class.strip().title()])
+                except KeyError:
+                    print(f"Unknown class for spell: {spell}\n\nwith class: {spell_class}")
