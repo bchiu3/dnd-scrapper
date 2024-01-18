@@ -1,6 +1,6 @@
 dnd-spells.txt
 *.xlsm
 *.xlsx
-exported_spells.json
+*.json
 __pycache__
 venv

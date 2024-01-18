@@ -115,7 +115,7 @@ class Spell:
         Returns:
             str: A string representing the object in JSON format.
         """
-        return json.dumps(self.__dict__, default=lambda o: o.toJSON())
+        return json.dumps(self.__dict__, default=lambda o: o.toJSON(), ensure_ascii=False)
     
     @staticmethod
     def _parse_spell_name(spell_name_unsanitized: str) -> str:

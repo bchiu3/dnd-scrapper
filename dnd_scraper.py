@@ -1,3 +1,4 @@
+# coding=utf8
 from datetime import time
 import datetime
 from pprint import pprint
@@ -19,7 +20,7 @@ class DNDScraper:
         self.spells = {}
         self.redis_queue = Queue(connection=Redis())
         
-        self.file = open("exported_spells.json", "w")
+        self.file = open("exported_spells.json", "w", encoding='utf-8')
             
         self.file.write("[")
         
@@ -93,7 +94,7 @@ def _set_components(spell: Spell, paragraphs: [PageElement]):
         components_end = spell_types.find("\n", components_start + 1)
         components = spell_types[components_start + 1:components_end]
         components = components[components.rfind("("):].strip("()")
-        spell.component_material = components
+        spell.component_material = sanitize_strings(components)
 
 def _set_description_upcast_classes(spell: Spell, paragraphs: [PageElement]):
     """
@@ -106,6 +107,7 @@ def _set_description_upcast_classes(spell: Spell, paragraphs: [PageElement]):
     Returns:
         None
     """
+    
     end_description = (
         "<p><strong><em>" + UPCAST_STARTING_TEXT + "</em></strong>", 
         "<p><strong><em>" + SPELL_CLASS_STARTING_TEXT + "</em></strong>"
@@ -120,7 +122,7 @@ def _set_description_upcast_classes(spell: Spell, paragraphs: [PageElement]):
             break
     
     description = paragraphs[9:i]
-    spell.description = "".join([str(p) for p in description])
+    spell.description = "".join([sanitize_strings(str(p)) for p in description])
     
     _set_upcast(spell, paragraphs[i:])
     
@@ -170,3 +172,6 @@ def _set_classes(spell: Spell, paragraphs: [PageElement]):
                     spell.classes.append(ClassTypes[spell_class.strip().title()])
                 except KeyError:
                     print(f"Unknown class for spell: {spell}\n\nwith class: {spell_class}")
+
+def sanitize_strings(paragraph: str):
+    return paragraph.replace("\n", " ").replace("\u2019", "'").replace("\u2013", "-")
