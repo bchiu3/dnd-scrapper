@@ -11,8 +11,8 @@ import json
 import time
 
 DND_SPELL_TAB_LIST = "dnd-spells.txt"
-UPCAST_STARTING_TEXT = "At Higher Levels."
-SPELL_CLASS_STARTING_TEXT = "Spell Lists."
+UPCAST_STARTING_TEXT = "At Higher Levels"
+SPELL_CLASS_STARTING_TEXT = "Spell Lists"
 
 class DNDScraper:
     def __init__(self):
@@ -109,13 +109,13 @@ def _set_description_upcast_classes(spell: Spell, paragraphs: [PageElement]):
     """
     
     end_description = (
-        "<p><strong><em>" + UPCAST_STARTING_TEXT + "</em></strong>", 
-        "<p><strong><em>" + SPELL_CLASS_STARTING_TEXT + "</em></strong>"
+        UPCAST_STARTING_TEXT, 
+        SPELL_CLASS_STARTING_TEXT
     )
     for i in range(9, len(paragraphs)):
         flag = False
         for end_str in end_description:
-            if str(paragraphs[i]).strip().startswith(end_str):
+            if end_str in str(paragraphs[i]):
                 flag = True
                 break
         if flag:
@@ -139,8 +139,8 @@ def _set_upcast(spell: Spell, paragraphs: [PageElement]):
     Returns:
         None
     """
-    if paragraphs[0].text.startswith(UPCAST_STARTING_TEXT):
-        upcast = paragraphs[0].text.strip(UPCAST_STARTING_TEXT).strip()
+    if paragraphs[0].text.strip().startswith(UPCAST_STARTING_TEXT):
+        upcast = paragraphs[0].text.strip(UPCAST_STARTING_TEXT).strip().lstrip(".").lstrip(":")
         spell.upcast = upcast
         spell.has_upcast = True
 
@@ -162,7 +162,7 @@ def _set_classes(spell: Spell, paragraphs: [PageElement]):
     """
     for paragraph in paragraphs:
         if paragraph.text.startswith(SPELL_CLASS_STARTING_TEXT):
-            classes = paragraph.text.replace(SPELL_CLASS_STARTING_TEXT, "").strip()
+            classes = paragraph.text.replace(SPELL_CLASS_STARTING_TEXT, "").strip().lstrip(".").lstrip(":")
             for spell_class in classes.split(","):
                 spell_class = spell_class.strip()
                 has_space = spell_class.find(" ")
