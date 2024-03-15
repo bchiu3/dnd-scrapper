@@ -185,13 +185,13 @@ class Spell:
     @staticmethod
     def _parse_spell_range(spell_range_unsanitized: str) -> (SpellRangeType, str):
         """
-            Parses the spell range from a given unsanitized string and returns the corresponding SpellRangeType and spell range as a tuple.
+        Parses the spell range from a given unsanitized string and returns the corresponding SpellRangeType and spell range as a tuple.
 
-            Parameters:
-                spell_range_unsanitized (str): The unsanitized string representing the spell range.
+        Parameters:
+            spell_range_unsanitized (str): The unsanitized string representing the spell range.
 
-            Returns:
-                tuple: A tuple containing the SpellRangeType and the spell range.
+        Returns:
+            tuple: A tuple containing the SpellRangeType and the spell range.
         """
         spell_range_unsanitized = spell_range_unsanitized.strip().lower()
         match spell_range_unsanitized:

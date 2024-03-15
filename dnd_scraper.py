@@ -174,4 +174,14 @@ def _set_classes(spell: Spell, paragraphs: [PageElement]):
                     print(f"Unknown class for spell: {spell}\n\nwith class: {spell_class}")
 
 def sanitize_strings(paragraph: str):
+    """
+    Generate a sanitized version of the input paragraph by replacing newline characters with spaces,
+    smart apostrophes with regular apostrophes, and en dashes with hyphens.
+
+    Args:
+        paragraph (str): The input paragraph to be sanitized.
+    
+    Returns: 
+        The sanitized version of the input paragraph.
+    """
     return paragraph.replace("\n", " ").replace("\u2019", "'").replace("\u2013", "-")
