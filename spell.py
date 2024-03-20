@@ -3,15 +3,19 @@ from enum import Enum, StrEnum
 import json
 import re
 
+from utils import feets_to_units
+
+
 class CastType(Enum):
     Action = 0
     Bonus = 1
     Reaction = 2
     Time = 3
     Unknown = 4
-    
+
     def toJSON(self):
         return self.name
+
 
 class SpellRangeType(Enum):
     Self = 0
@@ -21,15 +25,16 @@ class SpellRangeType(Enum):
     Unlimited = 4
     Units = 5
     Unknown = 6
-    
+
     def toJSON(self):
         return self.name
+
 
 class ComponentTypes(Enum):
     Verbal = 0
     Somatic = 1
     Material = 2
-    
+
     def toJSON(self):
         return self.name
 
@@ -44,68 +49,72 @@ class ClassTypes(StrEnum):
     Sorcerer = "sorcerer"
     Warlock = "warlock"
     Wizard = "wizard"
-    
+
     def toJSON(self):
         return self.name
+
 
 @dataclass
 class Spell:
     name: str = ""
     description: str = ""
     level: int = -1
-    
+
     school: str = ""
-    
+
     duration: str = ""
     is_concentration: bool = False
-    
+
     cast_type: CastType = CastType.Unknown
     cast_time: str = ""
     is_ritual: bool = False
-    
+
     range_type: SpellRangeType = SpellRangeType.Unknown
     spell_range: str = ""
-    
+
     has_upcast: bool = False
     upcast: str = ""
-    
+
     components: list[ComponentTypes] = field(default_factory=list)
     component_material: str = ""
     classes: list[ClassTypes] = field(default_factory=list)
-    
+
     url: str = ""
-    
+
     line: InitVar[str | None] = None
-    
+
     def __post_init__(self, line: str = None):
         if line is None:
             return
-        
-        name, school, cast_time, spell_range, duration, components, level, url = line.split("\t")
-        
-        spell_name = Spell._parse_spell_name(name) 
+
+        name, school, cast_time, spell_range, duration, components, level, url = line.split(
+            "\t")
+
+        spell_name = Spell._parse_spell_name(name)
         self.name = spell_name
-        
+
         school = school.strip().lower()
         self.school = school
-        
-        cast_type, cast_time_time, is_ritual = Spell._parse_cast_time(cast_time)
+
+        cast_type, cast_time_time, is_ritual = Spell._parse_cast_time(
+            cast_time)
         self.cast_type, self.cast_time, self.is_ritual = cast_type, cast_time_time, is_ritual
-        
-        spell_range_type, spell_range_range = Spell._parse_spell_range(spell_range)
+
+        spell_range_type, spell_range_range = Spell._parse_spell_range(
+            spell_range)
         self.range_type, self.spell_range = spell_range_type, spell_range_range
-        
+
         duration, is_concentration = Spell._parse_duration(duration)
         self.duration, self.is_concentration = duration, is_concentration
-        
+
         component_types = Spell._parse_components(components)
         self.components = component_types
-        
+
         level = Spell._parse_level(level)
         self.level = level
-        
+
         self.url = url
-    
+
     def to_json(self) -> str:
         """
         Converts the object to a JSON string representation.
@@ -116,7 +125,7 @@ class Spell:
             str: A string representing the object in JSON format.
         """
         return json.dumps(self.__dict__, default=lambda o: o.toJSON(), ensure_ascii=False)
-    
+
     @staticmethod
     def _parse_spell_name(spell_name_unsanitized: str) -> str:
         """
@@ -134,7 +143,7 @@ class Spell:
             if spell_name[spell_name_split + 1] == "(":
                 spell_name = spell_name[:spell_name_split]
         return spell_name
-    
+
     @staticmethod
     def _parse_cast_time(cast_time_unsanitized: str) -> (CastType, int, bool):
         """
@@ -154,7 +163,7 @@ class Spell:
             is_ritual = True
             cast_time_unsanitized = cast_time_unsanitized[:has_ritual]
         cast_time_unsanitized = cast_time_unsanitized.strip().lower().split(" ")
-        
+
         cast_time_time = 0
         match cast_time_unsanitized[1]:
             case "action":
@@ -172,14 +181,14 @@ class Spell:
             case t:
                 cast_type = CastType.Unknown
                 print(f"could not parse cast time: {t}")
-                
+
         # special case
         if len(cast_time_unsanitized) > 2 and cast_time_unsanitized[2] == "or":
             if "hour" in cast_time_unsanitized[4]:
                 cast_time_time = int(cast_time_unsanitized[3]) * 60
             else:
                 cast_time_time = int(cast_time_unsanitized[3])
-        
+
         return (cast_type, cast_time_time, is_ritual)
 
     @staticmethod
@@ -213,25 +222,12 @@ class Spell:
         if range_type == SpellRangeType.Self and self_spell_find != -1:
             units = spell_range_unsanitized[self_spell_find + 1:]
             spell_range = units.strip("()")
-            if "foot" in units:
-                spell_range = units.replace("foot", "unit")
-            elif "mile" in units:
-                spell_range = units.replace("mile", "unit")
+            spell_range = feets_to_units(spell_range)
         elif range_type == SpellRangeType.Units:
-            if "feet" in spell_range_unsanitized:
-                spell_range = spell_range_unsanitized.replace("feet", "unit")
-            elif "foot" in spell_range_unsanitized:
-                spell_range = spell_range_unsanitized.replace("foot", "unit")
-            elif "mile" in spell_range_unsanitized:
-                try:
-                    unit = next(re.finditer(r'\d+', spell_range_unsanitized))[0]
-                    range_unit = int(unit)
-                    spell_range = str(range_unit * 5280) + " unit"
-                except StopIteration:
-                    print(f"can't find number for spell range: {spell_range}")
-        
+            spell_range = feets_to_units(spell_range_unsanitized)
+
         return range_type, spell_range
-                
+
     @staticmethod
     def _parse_duration(duration_unsanitized: str) -> (str, bool):
         """
@@ -249,7 +245,7 @@ class Spell:
             duration = duration[duration.find(" ") + 1:]
             is_concentration = True
         return duration, is_concentration
-    
+
     @staticmethod
     def _parse_components(components_unsanitized: str) -> list[ComponentTypes]:
         """
@@ -260,12 +256,13 @@ class Spell:
 
         Returns:
             list[ComponentTypes]: A list of ComponentTypes representing the parsed components.
-        """   
-        components_unsanitized = components_unsanitized.strip().lower().replace(" ", "").replace('"', "")
+        """
+        components_unsanitized = components_unsanitized.strip().lower().replace(" ",
+                                                                                "").replace('"', "")
         components = components_unsanitized.split(",")
-        component_types = {"v": ComponentTypes.Verbal, "s": ComponentTypes.Somatic, "m": ComponentTypes.Material}
+        component_types = {"v": ComponentTypes.Verbal,
+                           "s": ComponentTypes.Somatic, "m": ComponentTypes.Material}
         return [component_types[c] for c in components]
-
 
     @staticmethod
     def _parse_level(level_unsanitized: str) -> int:
@@ -280,4 +277,3 @@ class Spell:
         """
         level = level_unsanitized.strip().lower()
         return int(level)
-    
