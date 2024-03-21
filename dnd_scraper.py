@@ -20,7 +20,7 @@ INTERVAL = 5
 
 
 class DNDScraper:
-    def __init__(self, type_grab=[str | None]):
+    def __init__(self, type_grab: (str | None) = None):
         if type_grab is None or type_grab == "spell":
             self.url = "http://dnd5e.wikidot.com/spells"
             self.spells = {}
@@ -54,15 +54,24 @@ class DNDScraper:
 
             self.file.write("[")
 
-            self.feats = get_feats(self.url)
+            self.feats = get_feats_urls(self.url)
+            
             for i, feat in enumerate(self.feats):
                 if i != 0:
                     self.file.write(", ")
+
+                name = feat.text
+                href_link = urljoin(self.url, feat.get("href"))
+                feat = search_feats(href_link, name)
+                if feat is None:
+                    continue
                 self.file.write(feat.to_json() + "\n")
+                time.sleep(INTERVAL)
+
             self.file.write("]")
 
     def close_file(self):
-        if self.file:
+        if hasattr(self, 'file') and self.file:
             self.file.close()
 
     def print_spells(self):
@@ -97,15 +106,15 @@ def search_spells(spell: Spell):
     _set_description_upcast_classes(spell, paragraphs)
 
 
-def get_feats(url: str) -> list:
+def get_feats_urls(url: str) -> list:
     """
-    A function to retrieve features from a given URL.
-
-    Parameters:
-    url (str): The URL to retrieve features from.
-
+    A function that takes a URL as input and returns a list of URLs for features.
+    
+    Args:
+        url: a string representing the URL
+    
     Returns:
-    list: A list of features extracted from the URL.
+        a list of BS4 elements representing the URLs for features
     """
     list_feats = []
     response = requests.get(url)
@@ -115,32 +124,40 @@ def get_feats(url: str) -> list:
     soup = BeautifulSoup(response.text, 'html.parser')
     # this is just the title of the table, not the entire table
     list_links = soup.find(id="toc70").parent.parent.parent.find_all("a")
-    for link in list_links:
-        name = link.text
-        href_link = urljoin(url, link.get("href"))
-        response = requests.get(href_link)
-        if response.status_code != 200:
-            continue
-        soup = BeautifulSoup(response.text, 'html.parser')
-        paragraphs = soup.find(id="page-content")
-        link_paragraphs = paragraphs.find_all('a')
-        for link in link_paragraphs:
-            link.replace_with(link.text)
+    return list_links
 
-        paragraphs = list(filter(lambda x: x.text.strip()
-                          != "", paragraphs.children))[1:]
-        prereq = ""
-        has_prereq = False
-        if PREREQ_TEXT.lower() in paragraphs[0].text.lower():
-            split_at = paragraphs[0].text.find(" ")
-            prereq = paragraphs[0].text[split_at+1:]
-            has_prereq = True
-            paragraphs = paragraphs[1:]
+def search_feats(url: str, name: str) -> (Feats|None):
+    """
+    Perform a search for features based on the provided URL and name.
 
-        paragraphs = sanitize_strings("".join(map(str, paragraphs)))
-        list_feats.append(Feats(name, paragraphs, prereq, has_prereq))
-        time.sleep(INTERVAL)
-    return list_feats
+    Args:
+        url: The URL to search for features.
+        name: The name of the features to be searched.
+
+    Returns:
+        Returns an instance of Feats if features are found, otherwise returns None.
+    """
+    response = requests.get(url)
+    if response.status_code != 200:
+        return None
+    soup = BeautifulSoup(response.text, 'html.parser')
+    paragraphs = soup.find(id="page-content")
+    link_paragraphs = paragraphs.find_all('a')
+    for link in link_paragraphs:
+        link.replace_with(link.text)
+
+    paragraphs = list(filter(lambda x: x.text.strip()
+                        != "", paragraphs.children))[1:]
+    prereq = ""
+    has_prereq = False
+    if PREREQ_TEXT.lower() in paragraphs[0].text.lower():
+        split_at = paragraphs[0].text.find(" ")
+        prereq = paragraphs[0].text[split_at+1:]
+        has_prereq = True
+        paragraphs = paragraphs[1:]
+
+    paragraphs = sanitize_strings("".join(map(str, paragraphs)))
+    return Feats(name, paragraphs, prereq, url, has_prereq)
 
 
 def _set_components(spell: Spell, paragraphs: [PageElement]):

@@ -8,6 +8,7 @@ class Feats:
     name: str = ""
     description: str = ""
     prerequisite: str = ""
+    url: str = ""
 
     has_prerequisite: bool = False
 

@@ -9,4 +9,4 @@ You do need a dnd-spells.txt file, with tab-seperated lines that look like this:
 (Check wikidot spell page)
 
 `python3 main.py`
-it will export into a json that you can use.
+it will export into two json files that you can use (one for spells and one for feats).
