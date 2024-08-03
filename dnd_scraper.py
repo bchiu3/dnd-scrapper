@@ -23,7 +23,7 @@ class DNDScraper:
             # self.redis_queue = Queue(connection=Redis())
 
             self.file = open("exported_spells.json", "w", encoding='utf-8')
-
+            self.spell_dict = self.get_wiki_table()
             self.file.write("[")
 
             with open(DND_SPELL_TAB_LIST) as file:
@@ -77,6 +77,41 @@ class DNDScraper:
         for i in self.spells:
             pprint(self.spells[i])
 
+    def get_wiki_table(self) -> list[dict[str,str]]:
+        '''
+        Extracts all the tables from the main page, given by `self.url`
+        '''
+        main_page = requests.get(self.url)
+        if main_page.status_code != 200:
+            raise LookupError(f'Could not connect to {self.url}')
+        
+        soup = BeautifulSoup(main_page.content, 'html.parser')
+        
+        table_categories = soup.find('ul', class_ = 'yui-nav').find_all('li')
+        categories_names = []
+        table_dict = []
+
+        for category in table_categories:
+            categories_names.append(category.find('a').text)
+
+        tables = soup.find_all('div', class_ = 'list-pages-box')
+        for i in range(len(tables)):
+            table = tables[i]
+            category = categories_names[i]
+            table_list = []
+            table_headers = [th.text for th in table.find_all('th')]
+            table_rows = table.find_all('tr')
+            
+            for row in table_rows[1:]:
+                row_dict = {}
+                cells = row.find_all('td')
+                for j in range(len(table_headers)):
+                    row_dict[table_headers[j]] = cells[j].text
+                    row_dict['URL'] = row.find('a', href = True)['href']
+                table_list.append(row_dict)
+            table_dict.append({category : table_list})
+        
+        return table_dict
 
 def search_spells(spell: Spell):
     """
