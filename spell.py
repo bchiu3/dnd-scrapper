@@ -1,5 +1,5 @@
 from dataclasses import InitVar, dataclass, field
-from enum import Enum, StrEnum
+from enum import Enum
 import json
 import re
 
@@ -39,7 +39,7 @@ class ComponentTypes(Enum):
         return self.name
 
 
-class ClassTypes(StrEnum):
+class ClassTypes(Enum):
     Artificer = "artificer"
     Bard = "bard"
     Cleric = "cleric"
@@ -87,8 +87,7 @@ class Spell:
         if line is None:
             return
 
-        name, school, cast_time, spell_range, duration, components, level, url = line.split(
-            "\t")
+        name, school, cast_time, spell_range, duration, components, level = line.split("\t")
 
         spell_name = Spell._parse_spell_name(name)
         self.name = spell_name
@@ -113,7 +112,9 @@ class Spell:
         level = Spell._parse_level(level)
         self.level = level
 
-        self.url = url
+        self.url = re.sub(r'\(.+?\)', '', self.name.replace("'", '').lower())
+        self.url = re.sub(r'\W', '-', self.url)
+        self.url = f'http://dnd5e.wikidot.com/spell:{self.url}'
 
     def to_json(self) -> str:
         """
@@ -145,7 +146,7 @@ class Spell:
         return spell_name
 
     @staticmethod
-    def _parse_cast_time(cast_time_unsanitized: str) -> (CastType, int, bool):
+    def _parse_cast_time(cast_time_unsanitized: str) -> tuple[CastType, int, bool]:
         """
         A static method that sanitizes a given cast time string and returns the sanitized value.
 
@@ -192,7 +193,7 @@ class Spell:
         return (cast_type, cast_time_time, is_ritual)
 
     @staticmethod
-    def _parse_spell_range(spell_range_unsanitized: str) -> (SpellRangeType, str):
+    def _parse_spell_range(spell_range_unsanitized: str) -> tuple[SpellRangeType, str]:
         """
         Parses the spell range from a given unsanitized string and returns the corresponding SpellRangeType and spell range as a tuple.
 
@@ -229,7 +230,7 @@ class Spell:
         return range_type, spell_range
 
     @staticmethod
-    def _parse_duration(duration_unsanitized: str) -> (str, bool):
+    def _parse_duration(duration_unsanitized: str) -> tuple[str, bool]:
         """
         Parses the duration string and returns the sanitized duration and a boolean value indicating whether the duration is a concentration.
 
