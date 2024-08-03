@@ -1,22 +1,18 @@
 # coding=utf8
-from datetime import time
-import datetime
 from pprint import pprint
 from urllib.parse import urljoin
 from bs4 import BeautifulSoup, PageElement
 import requests
 from feats import Feats
 from spell import ClassTypes, ComponentTypes, Spell
-from redis import Redis
-from rq import Queue
-import json
 import time
+from tqdm import tqdm
 
 DND_SPELL_TAB_LIST = "dnd-spells.txt"
 UPCAST_STARTING_TEXT = "At Higher Levels"
 SPELL_CLASS_STARTING_TEXT = "Spell Lists"
 PREREQ_TEXT = "prerequisite"
-INTERVAL = 5
+INTERVAL = 3
 
 
 class DNDScraper:
@@ -35,16 +31,19 @@ class DNDScraper:
                     spell = Spell(line=line.strip())
 
                     self.spells[spell.name] = spell
-
-            # self.time = datetime.datetime.now()
+            progress_bar = tqdm(total = len(self.spells.values()))
             for i, spell in enumerate(self.spells.values()):
-                # self.redis_queue.enqueue_at(self.time, search_spells, spell)
-                # self.time += datetime.timedelta(seconds=3)
+                try:
+                    search_spells(spell)
+                except Exception as e:
+                    print(f'Could not find spell {spell.name}')
+                    print(e)
+                    continue
                 if i != 0:
                     self.file.write(", ")
-                search_spells(spell)
                 self.file.write(spell.to_json() + "\n")
                 time.sleep(INTERVAL)
+                progress_bar.update(1)
             self.file.write("]")
         elif type_grab == "feats":
             self.url = "http://dnd5e.wikidot.com/#toc70"
@@ -91,7 +90,7 @@ def search_spells(spell: Spell):
     """
     response = requests.get(spell.url)
     if response.status_code != 200:
-        return
+        raise LookupError(f'Could not find {spell.name} from the following URL: {spell.url}')
 
     soup = BeautifulSoup(response.text, 'html.parser')
     paragraphs = soup.find(id="page-content")
@@ -160,7 +159,7 @@ def search_feats(url: str, name: str) -> (Feats|None):
     return Feats(name, paragraphs, prereq, url, has_prereq)
 
 
-def _set_components(spell: Spell, paragraphs: [PageElement]):
+def _set_components(spell: Spell, paragraphs: list[PageElement]):
     """
     Set the components of a spell based on the provided spell object and paragraphs.
 
@@ -180,7 +179,7 @@ def _set_components(spell: Spell, paragraphs: [PageElement]):
         spell.component_material = sanitize_strings(components)
 
 
-def _set_description_upcast_classes(spell: Spell, paragraphs: [PageElement]):
+def _set_description_upcast_classes(spell: Spell, paragraphs: list[PageElement]):
     """
     Set the description of a given spell and upcast it if necessary.
 
@@ -214,7 +213,7 @@ def _set_description_upcast_classes(spell: Spell, paragraphs: [PageElement]):
     _set_classes(spell, paragraphs[i:])
 
 
-def _set_upcast(spell: Spell, paragraphs: [PageElement]):
+def _set_upcast(spell: Spell, paragraphs: list[PageElement]):
     """
     Set up the upcast property of a given spell if it has upcast ability.
 
@@ -232,7 +231,7 @@ def _set_upcast(spell: Spell, paragraphs: [PageElement]):
         spell.has_upcast = True
 
 
-def _set_classes(spell: Spell, paragraphs: [PageElement]):
+def _set_classes(spell: Spell, paragraphs: list[PageElement]):
     """
     Set the classes of a given spell based on the paragraphs provided.
 
@@ -261,8 +260,7 @@ def _set_classes(spell: Spell, paragraphs: [PageElement]):
                     spell.classes.append(
                         ClassTypes[spell_class.strip().title()])
                 except KeyError:
-                    print(f"Unknown class for spell: {
-                          spell}\n\nwith class: {spell_class}")
+                    print(f"Unknown class for spell: {spell}\n\nwith class: {spell_class}")
 
 
 def sanitize_strings(paragraph: str):
