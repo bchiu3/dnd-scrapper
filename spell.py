@@ -2,8 +2,12 @@ from dataclasses import InitVar, dataclass, field
 from enum import Enum
 import json
 import re
+from urllib.parse import urljoin
 
-from utils import feets_to_units
+from bs4 import BeautifulSoup, PageElement
+import requests
+
+from utils import BASE_URL, feets_to_units, sanitize_strings
 
 
 class CastType(Enum):
@@ -54,8 +58,26 @@ class ClassTypes(Enum):
         return self.name
 
 
+LEVELS_MAP = {
+    "cantrip": 0,
+    "1st level": 1,
+    "2nd level": 2,
+    "3rd level": 3,
+    "4th level": 4,
+    "5th level": 5,
+    "6th level": 6,
+    "7th level": 7,
+    "8th level": 8,
+    "9th level": 9
+}
+UPCAST_STARTING_TEXT = "At Higher Levels"
+SPELL_CLASS_STARTING_TEXT = "Spell Lists"
+
+
 @dataclass
 class Spell:
+    spell: InitVar[dict | None] = None
+
     name: str = ""
     description: str = ""
     level: int = -1
@@ -81,18 +103,34 @@ class Spell:
 
     url: str = ""
 
-    line: InitVar[str | None] = None
-
-    def __post_init__(self, line: str = None):
-        if line is None:
+    def __post_init__(self, spell: dict = None):
+        if spell is None:
             return
 
-        name, school, cast_time, spell_range, duration, components, level = line.split("\t")
+        # get all from dict like:
+        # {
+        # 'Spell Name': '',
+        # 'School': '',
+        # 'Casting Time': '',
+        # 'Range': '',
+        # 'Duration': ',
+        # 'Components': '',
+        # 'URL': '',
+        # 'category': ''
+        # }
+        name = spell["Spell Name"]
+        school = spell["School"]
+        cast_time = spell["Casting Time"]
+        spell_range = spell["Range"]
+        duration = spell["Duration"]
+        components = spell["Components"]
+        level = spell["category"]
+        url = spell["URL"]
 
         spell_name = Spell._parse_spell_name(name)
         self.name = spell_name
 
-        school = school.strip().lower()
+        school = school.strip().lower().split(" ")[0]
         self.school = school
 
         cast_type, cast_time_time, is_ritual = Spell._parse_cast_time(
@@ -112,11 +150,15 @@ class Spell:
         level = Spell._parse_level(level)
         self.level = level
 
-        self.url = re.sub(r'\(.+?\)', '', self.name.replace("'", '').lower())
-        self.url = re.sub(r'\W', '-', self.url)
-        self.url = f'http://dnd5e.wikidot.com/spell:{self.url}'
+        self.url = urljoin(BASE_URL, url)
 
-    def to_json(self) -> str:
+        try:
+            self.search_spell()
+        except Exception as e:
+            print(f'Could not find spell {spell.name}')
+            print(e)
+
+    def to_json_str(self) -> str:
         """
         Converts the object to a JSON string representation.
 
@@ -151,12 +193,12 @@ class Spell:
         A static method that sanitizes a given cast time string and returns the sanitized value.
 
         Parameters:
-            - cast_time_unsanitized (str): The unsanitized cast time string.
+            cast_time_unsanitized (str): The unsanitized cast time string.
 
         Returns:
-            - tuple: A tuple containing two elements:
-                - int: The sanitized cast time value.
-                - bool: A flag indicating ritual casting
+            tuple: A tuple containing two elements:
+                int: The sanitized cast time value.
+                bool: A flag indicating ritual casting
         """
         has_ritual = cast_time_unsanitized.rfind(" ")
         is_ritual = False
@@ -164,6 +206,10 @@ class Spell:
             is_ritual = True
             cast_time_unsanitized = cast_time_unsanitized[:has_ritual]
         cast_time_unsanitized = cast_time_unsanitized.strip().lower().split(" ")
+
+        # reactions don't have 1 in front of them, but they should technically be 1 reaction
+        if len(cast_time_unsanitized) < 2:
+            cast_time_unsanitized = ["1"] + cast_time_unsanitized
 
         cast_time_time = 0
         match cast_time_unsanitized[1]:
@@ -234,7 +280,7 @@ class Spell:
         """
         Parses the duration string and returns the sanitized duration and a boolean value indicating whether the duration is a concentration.
 
-        Args:
+        Parameters:
             duration_unsanitized (str): The unsanitized duration string.
 
         Returns:
@@ -252,7 +298,7 @@ class Spell:
         """
         Parses the unsanitized components string and returns a list of ComponentTypes.
 
-        Args:
+        Parameters:
             components_unsanitized (str): The unsanitized components string.
 
         Returns:
@@ -270,11 +316,141 @@ class Spell:
         """
         Parse the level from a given unsanitized string.
 
-        Args:
+        Parameters:
             level_unsanitized (str): The unsanitized string representing the level.
 
         Returns:
             int: The parsed level as an integer.
         """
         level = level_unsanitized.strip().lower()
-        return int(level)
+        if level not in LEVELS_MAP:
+            return -1
+        return LEVELS_MAP[level]
+
+    def search_spell(self):
+        """
+        Perform a spell search for the given `Spell` object.
+
+        Parameters:
+            self: The `Spell` object to search for.
+
+        Returns:
+            None
+        """
+        response = requests.get(self.url)
+        if response.status_code != 200:
+            raise LookupError(f'Could not find {
+                              self.name} from the following URL: {self.url}')
+
+        soup = BeautifulSoup(response.text, 'html.parser')
+        paragraphs = soup.find(id="page-content")
+        link_paragraphs = paragraphs.find_all('a')
+        for link in link_paragraphs:
+            link.replace_with(link.text)
+
+        paragraphs = list(paragraphs.children)
+
+        self._set_components(paragraphs)
+
+        self._set_description_upcast_classes(paragraphs)
+
+    def _set_components(self, paragraphs: list[PageElement]):
+        """
+        Set the components of a spell based on the provided spell object and paragraphs.
+
+        Parameters:
+            self: The `Spell` object to set the components for.
+            paragraphs (list): A list of paragraphs containing the spell details.
+
+        Returns:
+            None
+        """
+        if ComponentTypes.Material in self.components:
+            spell_types = paragraphs[7].text
+            components_start = spell_types.find("Components: ")
+            components_end = spell_types.find("\n", components_start + 1)
+            components = spell_types[components_start + 1:components_end]
+            components = components[components.rfind("("):].strip("()")
+            self.component_material = sanitize_strings(components)
+
+    def _set_description_upcast_classes(self, paragraphs: list[PageElement]):
+        """
+        Set the description of a given spell and upcast it if necessary.
+
+        Parameters:
+            self: The `Spell` object to set the description and upcast for.
+            paragraphs (list): A list of paragraphs containing the description and upcast information.
+
+        Returns:
+            None
+        """
+
+        end_description = (
+            UPCAST_STARTING_TEXT,
+            SPELL_CLASS_STARTING_TEXT
+        )
+        for i in range(9, len(paragraphs)):
+            flag = False
+            for end_str in end_description:
+                if end_str in str(paragraphs[i]):
+                    flag = True
+                    break
+            if flag:
+                break
+
+        description = paragraphs[9:i]
+        self.description = "".join([sanitize_strings(str(p))
+                                    for p in description])
+
+        self._set_upcast(paragraphs[i:])
+
+        self._set_classes(paragraphs[i:])
+
+    def _set_upcast(self, paragraphs: list[PageElement]):
+        """
+        Set up the upcast property of a given spell if it has upcast ability.
+
+        Parameters:
+            self: The `Spell` object to set the upcast for.
+            paragraphs (list): The list of paragraphs STARTING AT THE UPCAST DESCRIPTION
+
+        Returns:
+            None
+        """
+        if paragraphs[0].text.strip().startswith(UPCAST_STARTING_TEXT):
+            upcast = paragraphs[0].text.strip(
+                UPCAST_STARTING_TEXT).strip().lstrip(".").lstrip(":")
+            self.upcast = upcast
+            self.has_upcast = True
+
+    def _set_classes(self, paragraphs: list[PageElement]):
+        """
+        Set the classes of a given spell based on the paragraphs provided.
+
+        This function iterates over each paragraph in the provided list of paragraphs. If a paragraph's text starts with
+        the specified starting text for spell classes, it extracts the class names from the paragraph's text and adds them
+        to the spell's classes attribute. The class names are expected to be comma-separated and any optional text is
+        removed before adding the class names to the spell's classes attribute.
+
+        Parameters:
+            self: The `Spell` object to set the classes for.
+            paragraphs (list): A list of PageElement objects representing the paragraphs to search for class information.
+
+        Returns:
+            None
+        """
+        for paragraph in paragraphs:
+            if paragraph.text.startswith(SPELL_CLASS_STARTING_TEXT):
+                classes = paragraph.text.replace(
+                    SPELL_CLASS_STARTING_TEXT, "").strip().lstrip(".").lstrip(":")
+                for spell_class in classes.split(","):
+                    spell_class = spell_class.strip()
+                    has_space = spell_class.find(" ")
+                    if has_space != -1:
+                        spell_class = spell_class[:spell_class.find(" ")]
+                    try:
+                        self.classes.append(
+                            ClassTypes[spell_class.strip().title()])
+                    except KeyError:
+                        print(f"Unknown class for spell: {
+                              self.name}\n\nwith class: {spell_class}")

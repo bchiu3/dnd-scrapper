@@ -1,13 +1,18 @@
-#from dataclasses import InitVar, dataclass, field
+# from dataclasses import InitVar, dataclass, field
 from enum import Enum
+import json
+from urllib.parse import urljoin
 import requests
 from bs4 import BeautifulSoup
 from markdownify import markdownify
 
+from utils import BASE_URL
+
+
 class Type(Enum):
     Weapon = 0
     Armor = 1
-    Ring  = 2
+    Ring = 2
     Wondrous = 3
     Potion = 4
     Scroll = 5
@@ -17,6 +22,7 @@ class Type(Enum):
 
     def toJSON(self):
         return self.name
+
 
 class Source(Enum):
     AI = "Acquisitions Incorporated"
@@ -71,6 +77,7 @@ class Source(Enum):
     def toJSON(self):
         return self.name
 
+
 class Rarity(Enum):
     Common = 0
     Uncommon = 1
@@ -84,30 +91,50 @@ class Rarity(Enum):
     def toJSON(self):
         return self.name
 
+
 class MagicItem:
 
-    def __init__(self, item : dict[str,str]) -> None:
+    def __init__(self, item: dict[str, str]) -> None:
         self.name = item['Item Name']
-        self.rarity = Rarity[item['category'].replace(' ', '').replace('???', 'Unknown')]
+        self.rarity = Rarity[item['category'].replace(
+            ' ', '').replace('???', 'Unknown')]
         self.type = Type[item['Type'].replace(' Item', '')]
         self.attuned = (item['Type'] == 'Attuned')
-        self.url = 'http://dnd5e.wikidot.com' + item['URL']
+        self.url = urljoin(BASE_URL, item['URL'])
         try:
             self.source = Source[item['Source'].replace(':', '').upper()]
         except Exception as e:
-            print(f'Could not set the source for {self.name} using the following URL: {self.url}')
+            print(f'Could not set the source for {
+                  self.name} using the following URL: {self.url}')
             print(e)
             self.source = Source.U
-        self.text = item.get('text', self.set_item_text()) 
+        self.text = item.get('text', self.set_item_text())
 
     def set_item_text(self) -> str:
+        """
+        Sets the item text based on the url
+
+        Raises:
+            LookupError: Raises an error if the url is not found
+
+        Returns:
+            str: The item text
+        """
         item_page = requests.get(self.url)
         if item_page.status_code != 200:
-            raise LookupError(f'Could not find {self.name} using this URL: {self.url}')
-        element_html = str(BeautifulSoup(item_page.content, 'html.parser').find(id = 'page-content'))
-        return markdownify(element_html, strip = ['scripts', 'page-tags'], autolinks = False)
+            raise LookupError(f'Could not find {
+                              self.name} using this URL: {self.url}')
+        element_html = str(BeautifulSoup(item_page.content,
+                           'html.parser').find(id='page-content'))
+        return markdownify(element_html, strip=['scripts', 'page-tags'], autolinks=False)
 
     def to_json(self) -> dict[str, str]:
+        """
+        Converts the object to a JSON representation.
+    
+        Returns:
+            dict[str, str]: _description_
+        """
         return {
             "name"      : self.name,
             "rarity"    : self.rarity.toJSON(),
@@ -117,4 +144,14 @@ class MagicItem:
             "text"      : self.text,
             "url"       : self.url
         }
-        
+    
+    def to_json_str(self) -> str:
+        """
+        Converts the object to a JSON string representation.
+
+        Parameters:
+            self: The object being converted to JSON.
+        Returns:
+            str: A string representing the object in JSON format.
+        """
+        return json.dumps(self.to_json(), default=lambda o: o.toJSON(), ensure_ascii=False)
