@@ -88,17 +88,17 @@ class MagicItem:
 
     def __init__(self, item : dict[str,str]) -> None:
         self.name = item['Item Name']
-        self.rarity = Rarity[item['category']]
+        self.rarity = Rarity[item['category'].replace(' ', '').replace('???', 'Unknown')]
         self.type = Type[item['Type'].replace(' Item', '')]
         self.attuned = (item['Type'] == 'Attuned')
-        try:
-            self.source = Source[item['Source'].replace(':', '').upper()].toJSON()
-        except:
-            print(f'Could not set the source for {self.name} using the following URL: {self.url}')
-            self.source = Source.U
-
         self.url = 'http://dnd5e.wikidot.com' + item['URL']
-        self.text = self.set_item_text()
+        try:
+            self.source = Source[item['Source'].replace(':', '').upper()]
+        except Exception as e:
+            print(f'Could not set the source for {self.name} using the following URL: {self.url}')
+            print(e)
+            self.source = Source.U
+        self.text = item.get('text', self.set_item_text()) 
 
     def set_item_text(self) -> str:
         item_page = requests.get(self.url)
