@@ -5,6 +5,9 @@ from bs4 import BeautifulSoup, PageElement
 import requests
 from feats import Feats
 from spell import ClassTypes, ComponentTypes, Spell
+from magic_item import MagicItem
+import json
+
 import time
 from tqdm import tqdm
 
@@ -12,7 +15,7 @@ DND_SPELL_TAB_LIST = "dnd-spells.txt"
 UPCAST_STARTING_TEXT = "At Higher Levels"
 SPELL_CLASS_STARTING_TEXT = "Spell Lists"
 PREREQ_TEXT = "prerequisite"
-INTERVAL = 3
+INTERVAL = 2
 
 
 class DNDScraper:
@@ -69,6 +72,27 @@ class DNDScraper:
 
             self.file.write("]")
 
+        elif type_grab == 'magic_item':
+            self.url = "http://dnd5e.wikidot.com/wondrous-items"
+            self.magic_items = {}
+
+            self.file = open("exported_magic_items.json", "w", encoding='utf-8')
+            self.file.write('[\n')
+            self.magic_item_list = self.get_wiki_table()
+            with open('./magic_items.json', 'w') as outputFile:
+                json.dump(self.magic_item_list, outputFile)
+
+            progress_bar = tqdm(total = len(self.magic_item_list))
+            for item in self.magic_item_list:
+                try:
+                    json.dump(MagicItem(item).to_json(), self.file)
+                    self.file.write(',')
+                except:
+                    pass
+                time.sleep(INTERVAL)
+                progress_bar.update(1)
+
+            self.file.write(']')
     def close_file(self):
         if hasattr(self, 'file') and self.file:
             self.file.close()
@@ -89,29 +113,29 @@ class DNDScraper:
         
         table_categories = soup.find('ul', class_ = 'yui-nav').find_all('li')
         categories_names = []
-        table_dict = []
 
         for category in table_categories:
             categories_names.append(category.find('a').text)
 
         tables = soup.find_all('div', class_ = 'list-pages-box')
+        table_list = []
         for i in range(len(tables)):
             table = tables[i]
             category = categories_names[i]
-            table_list = []
             table_headers = [th.text for th in table.find_all('th')]
             table_rows = table.find_all('tr')
             
             for row in table_rows[1:]:
                 row_dict = {}
                 cells = row.find_all('td')
-                for j in range(len(table_headers)):
-                    row_dict[table_headers[j]] = cells[j].text
-                    row_dict['URL'] = row.find('a', href = True)['href']
+                for header, cell in zip(table_headers, cells):
+                    row_dict[header] = cell.text
+
+                row_dict['URL'] = row.find('a', href = True)['href']
+                row_dict['category'] = category
                 table_list.append(row_dict)
-            table_dict.append({category : table_list})
         
-        return table_dict
+        return table_list
 
 def search_spells(spell: Spell):
     """
@@ -310,3 +334,7 @@ def sanitize_strings(paragraph: str):
         The sanitized version of the input paragraph.
     """
     return paragraph.replace("\n", " ").replace("\u2019", "'").replace("\u2013", "-")
+
+
+if __name__ == '__main__':
+    dnd_feat = DNDScraper("magic_item")
