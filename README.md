@@ -4,9 +4,16 @@ Scrapper for reading dnd spells and feats
 Uses the wikidot dnd page for scraping
 
 ## Running the scrapper
-You do need a dnd-spells.txt file, with tab-seperated lines that look like this:
-`Wish	Conjuration	1 Action	Self	Instantaneous	V	9	http://dnd5e.wikidot.com/spell:wish`
-(Check wikidot spell page)
+`python -r requirements.txt`
+Add dependencies to run code.
 
 `python3 main.py`
-it will export into two json files that you can use (one for spells and one for feats).
+Won't do anything by itself, you have to use one of the options from:
+`python3 main.py --help`
+
+## Current Args
+| Arg               | Description       |
+| -------------     | -------------     |
+| -f, --feats       | Scrape Feats      |
+| -m, --magic_item  | Scrape Magic Items|
+| -s, --spells      | Scrape spells     |

@@ -4,3 +4,4 @@ dnd-spells.txt
 *.json
 __pycache__
 venv
+.venv
