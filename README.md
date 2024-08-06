@@ -16,4 +16,4 @@ Won't do anything by itself, you have to use one of the options from:
 | -------------     | -------------     |
 | -f, --feats       | Scrape Feats      |
 | -m, --magic_item  | Scrape Magic Items|
-| -s, --spells      | Scrape spells     |
+| -s, --spells      | Scrape Spells     |
